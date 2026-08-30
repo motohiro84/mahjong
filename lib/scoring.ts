@@ -31,6 +31,33 @@ interface ScoreCandidate {
   wait: string;
 }
 
+function situationalYakuOf(state: AppState, closed: boolean): YakuResult[] {
+  const active = new Set(state.situationalYaku);
+  const result: YakuResult[] = [];
+  const tsumo = state.agariType === "tsumo";
+
+  const firstTurn = state.discards.length === 0 && state.melds.length === 0;
+  if (closed && tsumo && firstTurn && active.has("tenhou") && state.seat === 0) result.push({ nm: "天和", yakuman: 1 });
+  if (closed && tsumo && firstTurn && active.has("chiihou") && state.seat !== 0) result.push({ nm: "地和", yakuman: 1 });
+  if (state.riichi && closed) {
+    result.push(active.has("doubleRiichi") ? { nm: "ダブル立直", han: 2 } : { nm: "立直", han: 1 });
+    if (active.has("ippatsu")) result.push({ nm: "一発", han: 1 });
+  }
+  if (tsumo && closed) result.push({ nm: "門前清自摸和", han: 1 });
+  if (tsumo && active.has("haitei")) result.push({ nm: "海底摸月", han: 1 });
+  if (!tsumo && active.has("houtei")) result.push({ nm: "河底撈魚", han: 1 });
+  if (tsumo && active.has("rinshan")) result.push({ nm: "嶺上開花", han: 1 });
+  if (!tsumo && active.has("chankan")) result.push({ nm: "槍槓", han: 1 });
+  return result;
+}
+
+function isKokushiThirteenWait(counts: number[], winTile: number) {
+  const terminals = [0, 8, 9, 17, 18, 26, 27, 28, 29, 30, 31, 32, 33];
+  const beforeWin = counts.slice();
+  beforeWin[winTile]--;
+  return terminals.every((tile) => beforeWin[tile] === 1) && beforeWin.reduce((sum, count) => sum + count, 0) === 13;
+}
+
 export function decompose(counts: number[]) {
   const result: Decomposition[] = [];
   const work = counts.slice();
@@ -103,8 +130,7 @@ function yakuOf(state: AppState, decomposition: Decomposition, context: WaitCont
   tiles.push(pair, pair);
   const add = (nm: string, han: number) => result.push({ nm, han });
 
-  if (state.riichi && closed) add("立直", 1);
-  if (context.tsumo && closed) add("門前清自摸和", 1);
+  result.push(...situationalYakuOf(state, closed));
   if (tiles.every(isSimple)) add("断幺九", 1);
 
   const valuePairs = [31, 32, 33, 27 + state.round, 27 + state.seat];
@@ -137,7 +163,10 @@ function yakuOf(state: AppState, decomposition: Decomposition, context: WaitCont
   if (sets.every((set) => set.type === "kotsu")) add("対々和", 2);
 
   const concealedTriplets = sets.filter((set) => set.type === "kotsu" && !set.open).length;
-  if (concealedTriplets >= 4) result.push({ nm: "四暗刻", yakuman: 1 });
+  if (concealedTriplets >= 4) {
+    const double = state.doubleYakuman && context.wait === "tanki";
+    result.push({ nm: double ? "四暗刻単騎" : "四暗刻", yakuman: double ? 2 : 1 });
+  }
   else if (concealedTriplets === 3) add("三暗刻", 2);
   const kans = sets.filter((set) => set.kan).length;
   if (kans === 3) add("三槓子", 2);
@@ -149,7 +178,7 @@ function yakuOf(state: AppState, decomposition: Decomposition, context: WaitCont
   else if (dragonTriplets === 2 && dragonPair) add("小三元", 2);
   const windTriplets = triplets.filter((tile) => tile >= 27 && tile < 31).length;
   const windPair = pair >= 27 && pair < 31;
-  if (windTriplets === 4) result.push({ nm: "大四喜", yakuman: 1 });
+  if (windTriplets === 4) result.push({ nm: "大四喜", yakuman: state.doubleYakuman ? 2 : 1 });
   else if (windTriplets === 3 && windPair) result.push({ nm: "小四喜", yakuman: 1 });
 
   const blocks = sets.map((set) => (set.type === "shuntsu" ? [set.t, set.t + 1, set.t + 2] : [set.t])).concat([[pair]]);
@@ -179,7 +208,13 @@ function yakuOf(state: AppState, decomposition: Decomposition, context: WaitCont
       if (suitCounts[n] < nineGates[n]) valid = false;
       extra += suitCounts[n] - nineGates[n];
     }
-    if (valid && extra === 1 && closed) result.push({ nm: "九蓮宝燈", yakuman: 1 });
+    if (valid && extra === 1 && closed) {
+      const beforeWin = suitCounts.slice();
+      if (state.winTile !== null && Math.floor(state.winTile / 9) === [...suits][0]) beforeWin[state.winTile % 9]--;
+      const pure = beforeWin.every((count, index) => count === nineGates[index]);
+      const double = state.doubleYakuman && pure;
+      result.push({ nm: double ? "純正九蓮宝燈" : "九蓮宝燈", yakuman: double ? 2 : 1 });
+    }
   } else if (suits.size === 1 && hasHonor) add("混一色", closed ? 3 : 2);
   else if (suits.size === 0) add("混一色", closed ? 3 : 2);
 
@@ -230,7 +265,7 @@ function fuOf(state: AppState, decomposition: Decomposition, context: WaitContex
   return Math.ceil(fu / 10) * 10;
 }
 
-function pointResult(han: number, fu: number, dealer: boolean, tsumo: boolean, yakuman: number) {
+function pointResult(han: number, fu: number, dealer: boolean, tsumo: boolean, yakuman: number, state: Pick<AppState, "honba" | "kyotaku" | "kiriageMangan">) {
   let base: number;
   let limit = "";
   if (yakuman) {
@@ -253,38 +288,42 @@ function pointResult(han: number, fu: number, dealer: boolean, tsumo: boolean, y
     limit = "満貫";
   } else {
     const raw = fu * 2 ** (2 + han);
-    base = Math.min(2000, raw);
-    if (raw >= 2000) limit = "満貫";
+    const kiriage = state.kiriageMangan && raw === 1920;
+    base = kiriage ? 2000 : Math.min(2000, raw);
+    if (raw >= 2000 || kiriage) limit = kiriage ? "満貫（切り上げ）" : "満貫";
   }
   const round100 = (value: number) => Math.ceil(value / 100) * 100;
+  const kyotakuPoints = state.kyotaku * 1000;
+  const kyotakuPayment = state.kyotaku > 0 ? [{ label: `供託 ${state.kyotaku}本`, amount: `+${kyotakuPoints.toLocaleString()}点` }] : [];
   if (tsumo) {
     if (dealer) {
-      const each = round100(base * 2);
+      const each = round100(base * 2) + state.honba * 100;
       return {
-        total: each * 3,
+        total: each * 3 + kyotakuPoints,
         limit,
-        detail: `子3人が各${each.toLocaleString()}点`,
-        payments: [{ label: "子3人", amount: `各${each.toLocaleString()}点` }],
+        detail: `子3人が各${each.toLocaleString()}点${state.kyotaku ? `・供託${kyotakuPoints.toLocaleString()}点` : ""}`,
+        payments: [{ label: "子3人", amount: `各${each.toLocaleString()}点` }, ...kyotakuPayment],
       };
     }
-    const fromDealer = round100(base * 2);
-    const fromChild = round100(base);
+    const fromDealer = round100(base * 2) + state.honba * 100;
+    const fromChild = round100(base) + state.honba * 100;
     return {
-      total: fromDealer + fromChild * 2,
+      total: fromDealer + fromChild * 2 + kyotakuPoints,
       limit,
-      detail: `親が${fromDealer.toLocaleString()}点・子2人が各${fromChild.toLocaleString()}点`,
+      detail: `親が${fromDealer.toLocaleString()}点・子2人が各${fromChild.toLocaleString()}点${state.kyotaku ? `・供託${kyotakuPoints.toLocaleString()}点` : ""}`,
       payments: [
         { label: "親", amount: `${fromDealer.toLocaleString()}点` },
         { label: "他の子2人", amount: `各${fromChild.toLocaleString()}点` },
+        ...kyotakuPayment,
       ],
     };
   }
-  const total = round100(base * (dealer ? 6 : 4));
+  const handPoints = round100(base * (dealer ? 6 : 4)) + state.honba * 300;
   return {
-    total,
+    total: handPoints + kyotakuPoints,
     limit,
-    detail: `放銃者が${total.toLocaleString()}点`,
-    payments: [{ label: "放銃者（ロン牌を捨てた人）", amount: `${total.toLocaleString()}点` }],
+    detail: `放銃者が${handPoints.toLocaleString()}点${state.kyotaku ? `・供託${kyotakuPoints.toLocaleString()}点` : ""}`,
+    payments: [{ label: "放銃者（ロン牌を捨てた人）", amount: `${handPoints.toLocaleString()}点` }, ...kyotakuPayment],
   };
 }
 
@@ -298,12 +337,12 @@ export function bestScore(state: AppState): ScoreResult | null {
   const candidates: ScoreCandidate[] = [];
 
   if (closed && kokushiShanten(counts) === -1) {
-    candidates.push({ yaku: [{ nm: "国士無双", yakuman: 1 }], fu: 25, han: 0, yakuman: 1, wait: "special" });
+    const double = state.doubleYakuman && isKokushiThirteenWait(counts, state.winTile);
+    const yaku = [{ nm: double ? "国士無双十三面待ち" : "国士無双", yakuman: double ? 2 : 1 }, ...situationalYakuOf(state, closed)];
+    candidates.push({ yaku, fu: 25, han: 0, yakuman: yaku.reduce((sum, item) => sum + (item.yakuman || 0), 0), wait: "special" });
   }
   if (closed && chiitoitsuShanten(counts) === -1) {
-    const yaku: YakuResult[] = [{ nm: "七対子", han: 2 }];
-    if (state.riichi) yaku.unshift({ nm: "立直", han: 1 });
-    if (tsumo) yaku.unshift({ nm: "門前清自摸和", han: 1 });
+    const yaku: YakuResult[] = [...situationalYakuOf(state, closed), { nm: "七対子", han: 2 }];
     const tiles = state.hand.map((tile) => tile.i);
     if (tiles.every(isSimple)) yaku.push({ nm: "断幺九", han: 1 });
     if (tiles.every(isTerminalOrHonor)) yaku.push({ nm: "混老頭", han: 2 });
@@ -337,7 +376,7 @@ export function bestScore(state: AppState): ScoreResult | null {
   let best: ScoreResult | null = null;
   candidates.forEach((candidate) => {
     const han = candidate.yakuman ? 0 : candidate.han + dora.total;
-    const score = pointResult(han, candidate.fu, dealer, tsumo, candidate.yakuman);
+    const score = pointResult(han, candidate.fu, dealer, tsumo, candidate.yakuman, state);
     const yaku = candidate.yakuman ? candidate.yaku.filter((item) => item.yakuman) : candidate.yaku;
     if (!best || !best.score || score.total > best.score.total) {
       best = {

@@ -13,6 +13,7 @@ function state(hand: number[]): AppState {
     hand: hand.map((i) => ({ i, red: false })),
     melds: [], dora: [], uraDora: [], discards: [], otherDiscards: [], kuikae: [], riichi: false,
     winTile: hand.at(-1) ?? null, round: 0, seat: 1, agariType: "tsumo",
+    situationalYaku: [], honba: 0, kyotaku: 0, kiriageMangan: false, doubleYakuman: false,
     tab: "input", yakuSort: "near", history: [], hydrated: true,
   };
 }
@@ -131,4 +132,81 @@ test("他家の捨て牌は有効牌の残り枚数を減らすがフリテン�
   const after = ukeire(countsOf(next.hand), next.melds, (i) => Math.max(0, 4 - visibleCount(next, i)));
   assert.equal(after.tiles.find(({ i }) => i === 22)?.left, before.tiles.find(({ i }) => i === 22)!.left - 1);
   assert.equal(isPermanentFuriten(next), false);
+});
+
+test("最初の打牌でリーチするとダブル立直と一発を自動選択し、次の打牌で一発だけ消える", () => {
+  const current = state([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 27, 27]);
+  const declared = appReducer(current, { type: "DISCARD", tile: current.hand[11], riichi: true });
+  assert.deepEqual(new Set(declared.situationalYaku), new Set(["ippatsu", "doubleRiichi"]));
+  const drawn = appReducer(declared, { type: "ADD_TILE", tile: { i: 12, red: false } });
+  const nextTurn = appReducer(drawn, { type: "DISCARD", tile: { i: 12, red: false } });
+  assert.equal(nextTurn.situationalYaku.includes("ippatsu"), false);
+  assert.equal(nextTurn.situationalYaku.includes("doubleRiichi"), true);
+});
+
+test("配牌後の最初のツモは席に応じて天和または地和を自動選択する", () => {
+  const child = state([0, 1, 2, 3, 4, 5, 9, 10, 11, 18, 19, 20, 27]);
+  child.winTile = null;
+  const chiihou = appReducer(child, { type: "ADD_TILE", tile: { i: 27, red: false } });
+  assert.equal(chiihou.situationalYaku.includes("chiihou"), true);
+  const tenhou = appReducer(chiihou, { type: "SET_SEAT", seat: 0 });
+  assert.equal(tenhou.situationalYaku.includes("chiihou"), false);
+  assert.equal(tenhou.situationalYaku.includes("tenhou"), true);
+});
+
+test("一発・海底などの状況役を翻数へ加算する", () => {
+  const current = state([1, 2, 3, 10, 11, 12, 19, 20, 21, 23, 24, 25, 13, 13]);
+  current.riichi = true;
+  current.situationalYaku = ["doubleRiichi", "ippatsu", "haitei"];
+  const score = bestScore(current);
+  assert.ok(score?.yaku?.some((yaku) => yaku.nm === "ダブル立直" && yaku.han === 2));
+  assert.ok(score?.yaku?.some((yaku) => yaku.nm === "一発"));
+  assert.ok(score?.yaku?.some((yaku) => yaku.nm === "海底摸月"));
+});
+
+test("本場と供託を受取合計と支払い表示へ加算する", () => {
+  const current = state([2, 3, 4, 10, 11, 12, 13, 13, 19, 20, 21]);
+  current.hand[2].red = true;
+  current.melds = [{
+    type: "ADD", base: 14, tiles: [14, 14, 14, 14], redFlags: [false, false, false, false],
+    consumed: [14, 14, 14, 14].map((i) => ({ i, red: false })),
+  }];
+  current.dora = [1, 27];
+  current.winTile = 10;
+  current.honba = 1;
+  current.kyotaku = 2;
+  const score = bestScore(current);
+  assert.equal(score?.score?.total, 6300);
+  assert.ok(score?.score?.payments.some((payment) => payment.label === "供託 2本"));
+});
+
+test("切り上げ満貫を30符4翻へ適用する", () => {
+  const current = state([2, 3, 4, 10, 11, 12, 13, 13, 19, 20, 21]);
+  current.hand[2].red = true;
+  current.melds = [{
+    type: "ADD", base: 14, tiles: [14, 14, 14, 14], redFlags: [false, false, false, false],
+    consumed: [14, 14, 14, 14].map((i) => ({ i, red: false })),
+  }];
+  current.dora = [1, 2, 27];
+  current.winTile = 10;
+  assert.equal(bestScore(current)?.score?.total, 7900);
+  current.kiriageMangan = true;
+  assert.equal(bestScore(current)?.score?.total, 8000);
+  assert.equal(bestScore(current)?.score?.limit, "満貫（切り上げ）");
+});
+
+test("ダブル役満採用時は大四喜を2倍役満として扱う", () => {
+  const current = state([28, 28, 28, 29, 29, 29, 30, 30, 30, 31, 31]);
+  current.melds = [{
+    type: "PON", base: 27, tiles: [27, 27, 27], redFlags: [false, false, false],
+    consumed: [27, 27].map((i) => ({ i, red: false })),
+  }];
+  current.winTile = 31;
+  current.agariType = "ron";
+  assert.equal(bestScore(current)?.yakuman, 2);
+  assert.equal(bestScore(current)?.yaku?.find((yaku) => yaku.nm === "大四喜")?.yakuman, 1);
+  current.doubleYakuman = true;
+  assert.equal(bestScore(current)?.yakuman, 3);
+  assert.equal(bestScore(current)?.yaku?.find((yaku) => yaku.nm === "大四喜")?.yakuman, 2);
+  assert.equal(bestScore(current)?.score?.limit, "3倍役満");
 });

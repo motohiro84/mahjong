@@ -2,6 +2,7 @@ export type Suit = "man" | "pin" | "sou" | "honor";
 export type MeldType = "PON" | "CHI" | "KAN" | "ANKAN" | "ADD";
 export type AgariType = "ron" | "tsumo";
 export type AnalysisTab = "input" | "visible" | "ukeire" | "aim" | "score";
+export type SituationalYaku = "ippatsu" | "haitei" | "houtei" | "rinshan" | "chankan" | "doubleRiichi" | "tenhou" | "chiihou";
 
 export interface Tile {
   i: number;
@@ -29,6 +30,11 @@ export interface HandSnapshot {
   round: number;
   seat: number;
   agariType: AgariType;
+  situationalYaku: SituationalYaku[];
+  honba: number;
+  kyotaku: number;
+  kiriageMangan: boolean;
+  doubleYakuman: boolean;
 }
 
 export interface AppState extends HandSnapshot {

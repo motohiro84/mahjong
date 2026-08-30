@@ -1,7 +1,11 @@
-const CACHE = "haishirube-v2";
+const CACHE = "haishirube-v3";
 const CACHE_PREFIX = "haishirube-";
 const APP_ROUTES = ["/", "/yaku", "/rules", "/glossary"];
-const CORE_FILES = ["/manifest.webmanifest", "/icons/icon-192.svg", "/icons/icon-512.svg", "/icons/icon-maskable.svg"];
+const TILE_FILES = [
+  ...["m", "p", "s"].flatMap((suit) => Array.from({ length: 9 }, (_, index) => `/tiles/generated/${suit}${index + 1}.png`)),
+  ...["east", "south", "west", "north", "white", "green", "red"].map((name) => `/tiles/generated/${name}.png`),
+];
+const CORE_FILES = ["/manifest.webmanifest", "/icons/icon-192.svg", "/icons/icon-512.svg", "/icons/icon-maskable.svg", ...TILE_FILES];
 
 async function cacheResponse(cache, request) {
   try {

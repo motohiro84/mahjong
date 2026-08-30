@@ -1,4 +1,4 @@
-import { tileFace } from "@/lib/tile-svg";
+import Image from "next/image";
 import { tileName } from "@/lib/tiles";
 
 interface MahjongTileProps {
@@ -14,13 +14,10 @@ interface MahjongTileProps {
 }
 
 export function MahjongTile({ i, red = false, dora = false, selected = false, disabled = false, small = false, tiny = false, onClick, label }: MahjongTileProps) {
-  const className = `mahjong-tile${small ? " small" : ""}${tiny ? " tiny" : ""}${dora ? " dora" : ""}${selected ? " selected" : ""}`;
-  const svg = (
-    <svg aria-hidden="true" viewBox="0 0 60 84">
-      <rect width="60" height="84" rx="6" fill={dora ? "#fbeae6" : "#f2ecde"} stroke={dora ? "#b8382c" : "#d9d2c0"} strokeWidth={dora ? 3 : 1.5} />
-      <g dangerouslySetInnerHTML={{ __html: tileFace(i, red) }} />
-    </svg>
-  );
-  if (!onClick) return <span className={className} role="img" aria-label={label || tileName(i, red)}>{svg}</span>;
-  return <button type="button" className={className} disabled={disabled} onClick={onClick} aria-label={label || tileName(i, red)} aria-pressed={selected}>{svg}</button>;
+  const honors = ["east", "south", "west", "north", "white", "green", "red"];
+  const file = i < 9 ? `m${i + 1}` : i < 18 ? `p${i - 8}` : i < 27 ? `s${i - 17}` : honors[i - 27];
+  const className = `mahjong-tile${small ? " small" : ""}${tiny ? " tiny" : ""}${dora ? " dora" : ""}${red ? " red" : ""}${selected ? " selected" : ""}`;
+  const face = <><Image src={`/tiles/generated/${file}.png`} width={180} height={240} sizes="60px" unoptimized draggable={false} alt="" aria-hidden="true" />{red && <span className="red-badge" aria-hidden="true">赤</span>}</>;
+  if (!onClick) return <span className={className} role="img" aria-label={label || tileName(i, red)}>{face}</span>;
+  return <button type="button" className={className} disabled={disabled} onClick={onClick} aria-label={label || tileName(i, red)} aria-pressed={selected}>{face}</button>;
 }

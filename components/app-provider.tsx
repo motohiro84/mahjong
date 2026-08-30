@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useReducer } from "react";
-import type { AgariType, AnalysisTab, AppState, HandSnapshot, Meld, Tile } from "@/lib/types";
+import type { AgariType, AnalysisTab, AppState, HandSnapshot, Meld, SituationalYaku, Tile } from "@/lib/types";
 import { handSize } from "@/lib/tiles";
 
 const STORAGE_KEY = "haishirube-state-v1";
@@ -19,6 +19,11 @@ const initialState: AppState = {
   round: 0,
   seat: 1,
   agariType: "tsumo",
+  situationalYaku: [],
+  honba: 0,
+  kyotaku: 0,
+  kiriageMangan: false,
+  doubleYakuman: false,
   tab: "input",
   yakuSort: "near",
   history: [],
@@ -45,6 +50,10 @@ type Action =
   | { type: "SET_SEAT"; seat: number }
   | { type: "SET_AGARI"; agariType: AgariType }
   | { type: "SET_RIICHI"; riichi: boolean }
+  | { type: "TOGGLE_SITUATIONAL_YAKU"; yaku: SituationalYaku }
+  | { type: "SET_HONBA"; value: number }
+  | { type: "SET_KYOTAKU"; value: number }
+  | { type: "SET_SCORING_RULE"; rule: "kiriageMangan" | "doubleYakuman"; enabled: boolean }
   | { type: "SET_WIN_TILE"; tile: number }
   | { type: "SET_SORT"; sort: "near" | "han" }
   | { type: "RON"; tile: Tile }
@@ -65,7 +74,20 @@ function snapshot(state: AppState): HandSnapshot {
     round: state.round,
     seat: state.seat,
     agariType: state.agariType,
+    situationalYaku: state.situationalYaku,
+    honba: state.honba,
+    kyotaku: state.kyotaku,
+    kiriageMangan: state.kiriageMangan,
+    doubleYakuman: state.doubleYakuman,
   };
+}
+
+function withoutYaku(yaku: SituationalYaku[], ...removed: SituationalYaku[]) {
+  return yaku.filter((item) => !removed.includes(item));
+}
+
+function withYaku(yaku: SituationalYaku[], ...added: SituationalYaku[]) {
+  return [...new Set([...yaku, ...added])];
 }
 
 function changed(state: AppState, next: Partial<AppState>): AppState {
@@ -94,18 +116,26 @@ export function appReducer(state: AppState, action: Action): AppState {
         })),
         uraDora: action.state.riichi ? (action.state.uraDora || []).slice(0, (action.state.dora || []).length) : [],
         otherDiscards: action.state.otherDiscards || [],
+        situationalYaku: action.state.situationalYaku || [],
+        honba: Math.max(0, Math.min(99, action.state.honba || 0)),
+        kyotaku: Math.max(0, Math.min(99, action.state.kyotaku || 0)),
         history: [],
         hydrated: true,
       };
     case "ADD_TILE": {
       if (handSize(state) >= 14) return state;
       const nextHand = [...state.hand, action.tile];
+      let situationalYaku = state.situationalYaku;
+      if (handSize(state) === 13 && state.discards.length === 0 && state.melds.length === 0) {
+        situationalYaku = withYaku(withoutYaku(situationalYaku, "tenhou", "chiihou"), state.seat === 0 ? "tenhou" : "chiihou");
+      }
       return changed(state, {
         hand: nextHand,
         winTile: action.tile.i,
         agariType: "tsumo",
         kuikae: [],
         uraDora: [],
+        situationalYaku,
       });
     }
     case "REMOVE_TILE": {
@@ -113,7 +143,7 @@ export function appReducer(state: AppState, action: Action): AppState {
       if (index < 0) return state;
       const hand = state.hand.slice();
       hand.splice(index, 1);
-      return changed(state, { hand, winTile: null, uraDora: [] });
+      return changed(state, { hand, winTile: null, uraDora: [], situationalYaku: withoutYaku(state.situationalYaku, "tenhou", "chiihou", "haitei", "houtei", "rinshan", "chankan") });
     }
     case "DISCARD": {
       if (state.kuikae.includes(action.tile.i)) return state;
@@ -121,6 +151,13 @@ export function appReducer(state: AppState, action: Action): AppState {
       if (index < 0) return state;
       const hand = state.hand.slice();
       const [discard] = hand.splice(index, 1);
+      let situationalYaku = withoutYaku(state.situationalYaku, "tenhou", "chiihou", "haitei", "houtei", "rinshan", "chankan");
+      if (action.riichi) {
+        situationalYaku = withYaku(situationalYaku, "ippatsu");
+        if (state.discards.length === 0 && state.melds.length === 0) situationalYaku = withYaku(situationalYaku, "doubleRiichi");
+      } else if (state.riichi) {
+        situationalYaku = withoutYaku(situationalYaku, "ippatsu");
+      }
       return changed(state, {
         hand,
         discards: [...state.discards, discard],
@@ -129,9 +166,12 @@ export function appReducer(state: AppState, action: Action): AppState {
         agariType: "tsumo",
         riichi: action.riichi ? true : state.riichi,
         uraDora: [],
+        situationalYaku,
       });
     }
-    case "ADD_MELD":
+    case "ADD_MELD": {
+      let situationalYaku = withoutYaku(state.situationalYaku, "ippatsu", "doubleRiichi", "tenhou", "chiihou", "haitei", "houtei", "chankan", "rinshan");
+      if (["KAN", "ANKAN"].includes(action.meld.type)) situationalYaku = withYaku(situationalYaku, "rinshan");
       return changed(state, {
         hand: removeTiles(state.hand, action.consume),
         melds: [...state.melds, { ...action.meld, consumed: action.consume }],
@@ -139,7 +179,9 @@ export function appReducer(state: AppState, action: Action): AppState {
         riichi: false,
         winTile: null,
         uraDora: [],
+        situationalYaku,
       });
+    }
     case "UPGRADE_KAN": {
       const melds = state.melds.slice();
       const old = melds[action.meldIndex];
@@ -151,7 +193,10 @@ export function appReducer(state: AppState, action: Action): AppState {
         redFlags: [...old.redFlags, action.tile.red],
         consumed: [...old.consumed, action.tile],
       };
-      return changed(state, { hand: removeTiles(state.hand, [action.tile]), melds, kuikae: [], winTile: null, uraDora: [] });
+      return changed(state, {
+        hand: removeTiles(state.hand, [action.tile]), melds, kuikae: [], winTile: null, uraDora: [],
+        situationalYaku: withYaku(withoutYaku(state.situationalYaku, "ippatsu", "tenhou", "chiihou", "haitei", "houtei", "chankan"), "rinshan"),
+      });
     }
     case "REMOVE_MELD": {
       const meld = state.melds[action.meldIndex];
@@ -160,7 +205,7 @@ export function appReducer(state: AppState, action: Action): AppState {
       if (restoredHand.length + (state.melds.length - 1) * 3 > 14) return state;
       const melds = state.melds.slice();
       melds.splice(action.meldIndex, 1);
-      return changed(state, { hand: restoredHand, melds, kuikae: [], winTile: null, uraDora: [] });
+      return changed(state, { hand: restoredHand, melds, kuikae: [], winTile: null, uraDora: [], situationalYaku: withoutYaku(state.situationalYaku, "rinshan") });
     }
     case "ADD_DORA":
       return state.dora.length >= 5 ? state : changed(state, { dora: [...state.dora, action.tile] });
@@ -207,11 +252,45 @@ export function appReducer(state: AppState, action: Action): AppState {
     case "SET_ROUND":
       return changed(state, { round: action.round });
     case "SET_SEAT":
-      return changed(state, { seat: action.seat });
+      return changed(state, {
+        seat: action.seat,
+        situationalYaku: state.situationalYaku.includes("tenhou") || state.situationalYaku.includes("chiihou")
+          ? withYaku(withoutYaku(state.situationalYaku, "tenhou", "chiihou"), action.seat === 0 ? "tenhou" : "chiihou")
+          : state.situationalYaku,
+      });
     case "SET_AGARI":
-      return changed(state, { agariType: action.agariType });
+      return changed(state, {
+        agariType: action.agariType,
+        situationalYaku: action.agariType === "ron"
+          ? withoutYaku(state.situationalYaku, "haitei", "rinshan", "tenhou", "chiihou")
+          : withoutYaku(state.situationalYaku, "houtei", "chankan"),
+      });
     case "SET_RIICHI":
-      return changed(state, { riichi: action.riichi, uraDora: action.riichi ? state.uraDora : [] });
+      return changed(state, {
+        riichi: action.riichi,
+        uraDora: action.riichi ? state.uraDora : [],
+        situationalYaku: action.riichi ? state.situationalYaku : withoutYaku(state.situationalYaku, "ippatsu", "doubleRiichi"),
+      });
+    case "TOGGLE_SITUATIONAL_YAKU": {
+      if (state.situationalYaku.includes(action.yaku)) {
+        return changed(state, { situationalYaku: state.situationalYaku.filter((item) => item !== action.yaku) });
+      }
+      const exclusive: Partial<Record<SituationalYaku, SituationalYaku[]>> = {
+        haitei: ["rinshan"],
+        rinshan: ["haitei"],
+        houtei: ["chankan"],
+        chankan: ["houtei"],
+        tenhou: ["chiihou"],
+        chiihou: ["tenhou"],
+      };
+      return changed(state, { situationalYaku: withYaku(withoutYaku(state.situationalYaku, ...(exclusive[action.yaku] || [])), action.yaku) });
+    }
+    case "SET_HONBA":
+      return changed(state, { honba: Math.max(0, Math.min(99, action.value)) });
+    case "SET_KYOTAKU":
+      return changed(state, { kyotaku: Math.max(0, Math.min(99, action.value)) });
+    case "SET_SCORING_RULE":
+      return changed(state, { [action.rule]: action.enabled });
     case "SET_WIN_TILE":
       return changed(state, { winTile: action.tile });
     case "SET_SORT":
@@ -223,6 +302,7 @@ export function appReducer(state: AppState, action: Action): AppState {
         agariType: "ron",
         tab: "score",
         uraDora: [],
+        situationalYaku: withoutYaku(state.situationalYaku, "haitei", "rinshan", "tenhou", "chiihou"),
       });
     case "UNDO": {
       const previous = state.history.at(-1);

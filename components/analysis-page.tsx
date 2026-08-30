@@ -5,7 +5,7 @@ import { AppShell } from "./app-shell";
 import { MahjongTile } from "./mahjong-tile";
 import { useAppState } from "./app-provider";
 import type { ChiOption } from "@/lib/analysis";
-import type { MeldType, Tile } from "@/lib/types";
+import type { MeldType, SituationalYaku, Tile } from "@/lib/types";
 import {
   buildMeld,
   chiOptions,
@@ -19,7 +19,7 @@ import {
 } from "@/lib/analysis";
 import { bestScore, scorePreview } from "@/lib/scoring";
 import { shanten, ukeire } from "@/lib/shanten";
-import { countsOf, doraCount, handSize, HONORS, indicatorToDora, RED_FIVES, tileName, visibleCount } from "@/lib/tiles";
+import { countsOf, doraCount, handSize, HONORS, indicatorToDora, isOpen, RED_FIVES, tileName, visibleCount } from "@/lib/tiles";
 import { yakuGuides } from "@/lib/yaku-guide";
 
 type ActionMode = "RON" | "RIICHI" | MeldType;
@@ -210,12 +210,40 @@ function ScorePanel({ state }: { state: ReturnType<typeof useAppState>["state"] 
   if (handSize(state) !== 14) return <p className="empty-message">和了形になると、入力した状態を引き継いで成立役と点数を表示します。</p>;
   const result = bestScore(state);
   const canSetUra = state.riichi && result && !result.needWinTile && !result.noYaku && !!result.score && state.dora.length > 0;
+  const closed = !isOpen(state);
+  const noDiscard = state.discards.length === 0 && state.melds.length === 0;
+  const situationalOptions = ([
+    { yaku: "ippatsu", label: "一発", visible: state.riichi && closed },
+    { yaku: "doubleRiichi", label: "ダブル立直", visible: state.riichi && closed },
+    { yaku: "haitei", label: "海底摸月", visible: state.agariType === "tsumo" },
+    { yaku: "houtei", label: "河底撈魚", visible: state.agariType === "ron" },
+    { yaku: "rinshan", label: "嶺上開花", visible: state.agariType === "tsumo" },
+    { yaku: "chankan", label: "槍槓", visible: state.agariType === "ron" },
+    { yaku: "tenhou", label: "天和", visible: state.agariType === "tsumo" && closed && state.seat === 0 && noDiscard },
+    { yaku: "chiihou", label: "地和", visible: state.agariType === "tsumo" && closed && state.seat !== 0 && noDiscard },
+  ] satisfies { yaku: SituationalYaku; label: string; visible: boolean }[]).filter((option) => option.visible);
   return <>
     <div className="score-controls"><span>{state.agariType === "ron" ? "ロン" : "ツモ"}</span>{state.riichi && <span>リーチ中</span>}{result?.wait && <span>{WAIT_LABELS[result.wait] || result.wait}</span>}{canSetUra && <button className={uraMode ? "active" : ""} onClick={() => setUraMode((value) => !value)}>裏ドラ {state.uraDora.length}/{state.dora.length}</button>}</div>
+    <section className="score-options">
+      <div className="score-options-title"><div><h2>和了時の状況</h2><p>操作順から分かる項目は自動選択されます。実際の状況と違う場合はタップして外せます。</p></div></div>
+      <div className="situation-buttons">{situationalOptions.map(({ yaku, label }) => <button key={yaku} className={state.situationalYaku.includes(yaku) ? "active" : ""} aria-pressed={state.situationalYaku.includes(yaku)} onClick={() => dispatch({ type: "TOGGLE_SITUATIONAL_YAKU", yaku })}>{label}</button>)}</div>
+      <div className="counter-options">
+        <ScoreStepper label="本場" value={state.honba} unit="本" onChange={(value) => dispatch({ type: "SET_HONBA", value })} />
+        <ScoreStepper label="供託" value={state.kyotaku} unit="本" onChange={(value) => dispatch({ type: "SET_KYOTAKU", value })} />
+      </div>
+      <div className="rule-options">
+        <button className={state.kiriageMangan ? "active" : ""} aria-pressed={state.kiriageMangan} onClick={() => dispatch({ type: "SET_SCORING_RULE", rule: "kiriageMangan", enabled: !state.kiriageMangan })}><b>切り上げ満貫</b><small>30符4翻・60符3翻</small></button>
+        <button className={state.doubleYakuman ? "active" : ""} aria-pressed={state.doubleYakuman} onClick={() => dispatch({ type: "SET_SCORING_RULE", rule: "doubleYakuman", enabled: !state.doubleYakuman })}><b>ダブル役満</b><small>単騎・十三面・純正・大四喜</small></button>
+      </div>
+    </section>
     {uraMode && canSetUra && <section className="workspace ura-workspace"><div className="workspace-title"><div><h2>裏ドラ表示牌を入力</h2><p>リーチ和了時だけ加算します。表ドラと同じ枚数まで入力できます。</p></div><button className="text-button" onClick={() => setUraMode(false)}>閉じる</button></div>{state.uraDora.length > 0 && <div className="ura-list">{state.uraDora.map((tile, index) => <MahjongTile key={`${tile}-${index}`} i={tile} small onClick={() => dispatch({ type: "REMOVE_URA_DORA", index })} label={`${tileName(tile)}の裏ドラ表示牌を削除`} />)}</div>}<TileGrid onPick={(tile) => dispatch({ type: "ADD_URA_DORA", tile })} disabled={(tile) => state.uraDora.length >= state.dora.length || visibleCount(state, tile) + state.uraDora.filter((item) => item === tile).length >= 4} /></section>}
     {!result ? <p className="empty-message">まだ和了形ではありません。</p> : result.needWinTile ? <p className="empty-message">和了牌が記録されていません。手牌をタップして指定してください。</p> : result.noYaku ? <div className="no-yaku"><b>役がありません</b><span>形はそろっていますが、このままでは上がれません。</span></div> : result.score && <>
-      <article className="score-card"><div className="score-total"><small>受取合計</small><strong>{result.score.total.toLocaleString()}<em>点</em></strong><span>{result.yakuman ? result.score.limit : `${result.han}翻 ${result.fu}符${result.score.limit ? `（${result.score.limit}）` : ""}`}　{state.seat === 0 ? "親" : "子"}</span></div><table><tbody>{result.yaku?.map((yaku) => <tr key={yaku.nm}><th>{yaku.nm}</th><td>{yaku.yakuman ? "役満" : `${yaku.han}翻`}</td></tr>)}{!!result.omoteDora && <tr><th>表ドラ</th><td>{result.omoteDora}翻</td></tr>}{!!result.uraDora && <tr><th>裏ドラ</th><td>{result.uraDora}翻</td></tr>}{!!result.akaDora && <tr><th>赤ドラ</th><td>{result.akaDora}翻</td></tr>}</tbody></table><div className="payment"><h3>点数の受け取り方</h3>{result.score.payments.map((payment) => <div key={payment.label}><span>{payment.label}</span><b>{payment.amount}</b></div>)}<div><span>あなたの受取合計</span><b>{result.score.total.toLocaleString()}点</b></div></div></article>
+      <article className="score-card"><div className="score-total"><small>受取合計</small><strong>{result.score.total.toLocaleString()}<em>点</em></strong><span>{result.yakuman ? result.score.limit : `${result.han}翻 ${result.fu}符${result.score.limit ? `（${result.score.limit}）` : ""}`}　{state.seat === 0 ? "親" : "子"}</span></div><table><tbody>{result.yaku?.map((yaku) => <tr key={yaku.nm}><th>{yaku.nm}</th><td>{yaku.yakuman ? yaku.yakuman > 1 ? `${yaku.yakuman}倍役満` : "役満" : `${yaku.han}翻`}</td></tr>)}{!!result.omoteDora && <tr><th>表ドラ</th><td>{result.omoteDora}翻</td></tr>}{!!result.uraDora && <tr><th>裏ドラ</th><td>{result.uraDora}翻</td></tr>}{!!result.akaDora && <tr><th>赤ドラ</th><td>{result.akaDora}翻</td></tr>}</tbody></table><div className="payment"><h3>点数の受け取り方</h3>{result.score.payments.map((payment) => <div key={payment.label}><span>{payment.label}</span><b>{payment.amount}</b></div>)}<div><span>あなたの受取合計</span><b>{result.score.total.toLocaleString()}点</b></div></div></article>
     </>}
     <p className="note">ロン／ツモとリーチ状態は手牌タブの内容を自動反映します。和了牌を変える場合は上の手牌をタップしてください。</p>
   </>;
+}
+
+function ScoreStepper({ label, value, unit, onChange }: { label: string; value: number; unit: string; onChange: (value: number) => void }) {
+  return <div><span>{label}</span><div><button disabled={value <= 0} onClick={() => onChange(value - 1)} aria-label={`${label}を1つ減らす`}>−</button><b>{value}<small>{unit}</small></b><button disabled={value >= 99} onClick={() => onChange(value + 1)} aria-label={`${label}を1つ増やす`}>＋</button></div></div>;
 }

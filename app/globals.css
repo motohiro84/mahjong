@@ -63,10 +63,14 @@ button { color: inherit; }
 .meld > button:disabled { opacity: .25; }
 .face-down-tile { display: inline-block; width: 31px; height: 43px; border-radius: 4px; background: #3a4152; box-shadow: 0 1px 0 #252a34, 0 2px 3px #0007; }
 
-.mahjong-tile { width: 42px; height: 59px; padding: 0; border: 0; border-radius: 5px; background: transparent; flex: 0 0 auto; display: inline-flex; box-shadow: 0 2px 2px #0007; }
-.mahjong-tile svg { width: 100%; height: 100%; display: block; }
+.mahjong-tile { position: relative; width: 42px; height: 59px; padding: 0; border: 0; border-radius: 5px; background: transparent; flex: 0 0 auto; display: inline-flex; box-shadow: 0 2px 2px #0007; }
+.mahjong-tile img { width: 100%; height: 100%; object-fit: fill; display: block; border-radius: inherit; }
 .mahjong-tile.small { width: 31px; height: 43px; }
 .mahjong-tile.tiny { width: 24px; height: 34px; box-shadow: 0 1px 1px #0005; }
+.mahjong-tile.dora { outline: 2px solid #c84d45; outline-offset: -2px; }
+.mahjong-tile.red { outline: 2px solid #d64e45; outline-offset: -2px; }
+.red-badge { position: absolute; top: 1px; right: 1px; display: grid; place-items: center; min-width: 12px; height: 12px; padding: 0 2px; border-radius: 4px; background: #bb2f2b; color: #fff; font-size: 8px; font-weight: 900; line-height: 1; box-shadow: 0 1px 2px #0008; }
+.mahjong-tile.tiny .red-badge { min-width: 9px; height: 9px; font-size: 6px; }
 .mahjong-tile.selected { outline: 3px solid var(--green); outline-offset: 1px; }
 .mahjong-tile:disabled { opacity: .22; filter: grayscale(.7); }
 
@@ -90,7 +94,7 @@ button { color: inherit; }
 .tile-grid-row { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 2px; }
 .tile-grid-row:last-child { grid-template-columns: repeat(7, minmax(0, 1fr)); padding-right: 22%; }
 .tile-grid .mahjong-tile { width: 100%; height: clamp(36px, calc((100dvh - 424px) / 4), 49px); aspect-ratio: auto; justify-content: center; box-shadow: none; }
-.tile-grid .mahjong-tile svg { width: auto; height: 100%; filter: drop-shadow(0 2px 1px #0007); }
+.tile-grid .mahjong-tile img { width: auto; height: 100%; filter: drop-shadow(0 2px 1px #0007); }
 
 .choice-panel { text-align: center; }
 .choice-panel > p { margin: 6px 0 13px; }
@@ -128,6 +132,25 @@ button { color: inherit; }
 .sort-row button, .score-controls button, .score-controls span { border: 1px solid var(--line); border-radius: 30px; background: transparent; color: var(--muted); padding: 8px 16px; font-size: 12px; }
 .sort-row button.active, .score-controls .active, .score-controls span { background: var(--gold); border-color: var(--gold); color: #1d1a12; font-weight: 800; }
 .score-controls { flex-wrap: wrap; }
+.score-options { margin-bottom: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 13px; background: var(--surface); }
+.score-options-title h2 { margin: 0; font-size: 14px; }
+.score-options-title p { margin: 3px 0 10px; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.situation-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.situation-buttons button { min-height: 36px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-2); color: var(--muted); padding: 7px 10px; font-size: 11px; font-weight: 700; }
+.situation-buttons button.active { border-color: var(--gold); background: #3d3520; color: var(--gold); }
+.counter-options { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; margin-top: 10px; }
+.counter-options > div { display: flex; align-items: center; justify-content: space-between; min-width: 0; padding: 7px 8px; border-radius: 9px; background: var(--surface-2); }
+.counter-options > div > span { color: var(--muted); font-size: 11px; font-weight: 700; }
+.counter-options > div > div { display: flex; align-items: center; gap: 6px; }
+.counter-options button { width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-3); padding: 0; font-size: 18px; }
+.counter-options button:disabled { opacity: .3; }
+.counter-options b { min-width: 32px; text-align: center; font-variant-numeric: tabular-nums; }
+.counter-options b small { margin-left: 2px; color: var(--muted); font-size: 8px; }
+.rule-options { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; margin-top: 7px; }
+.rule-options button { display: flex; flex-direction: column; align-items: flex-start; min-height: 48px; border: 1px solid var(--line); border-radius: 9px; background: transparent; color: var(--muted); padding: 8px 9px; text-align: left; }
+.rule-options button b { font-size: 11px; }
+.rule-options button small { margin-top: 2px; font-size: 8px; line-height: 1.35; }
+.rule-options button.active { border-color: var(--green); background: #173129; color: var(--green); }
 .ura-workspace { margin-bottom: 10px; }
 .ura-list { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 2px 9px; }
 .yaku-guides { display: flex; flex-direction: column; gap: 10px; }
