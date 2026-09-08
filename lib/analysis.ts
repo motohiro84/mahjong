@@ -35,7 +35,8 @@ export function isPermanentFuriten(state: AppState) {
   if (handSize(state) !== 13) return false;
   const counts = countsOf(state.hand);
   if (shanten(counts, state.melds) !== 0) return false;
-  const waits = ukeire(counts, state.melds, (i) => Math.max(0, 4 - visibleCount(state, i))).tiles.map((tile) => tile.i);
+  // フリテンは残り枚数によらず、和了形を作れる全牌で判定する。
+  const waits = ukeire(counts, state.melds, () => 1).tiles.map((tile) => tile.i);
   return state.discards.some((tile) => waits.includes(tile.i));
 }
 

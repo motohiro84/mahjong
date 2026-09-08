@@ -2,9 +2,9 @@
 
 import { createContext, useContext, useEffect, useMemo, useReducer } from "react";
 import type { AgariType, AnalysisTab, AppState, HandSnapshot, Meld, SituationalYaku, Tile } from "@/lib/types";
-import { handSize } from "@/lib/tiles";
+import { canAddTile, canDiscardTile, handSize } from "@/lib/tiles";
 
-const STORAGE_KEY = "haishirube-state-v1";
+import { saveState, STORAGE_KEY } from "@/lib/persistence";
 
 const initialState: AppState = {
   hand: [],
@@ -34,6 +34,7 @@ type Action =
   | { type: "HYDRATE"; state: Partial<AppState> }
   | { type: "ADD_TILE"; tile: Tile }
   | { type: "REMOVE_TILE"; tile: Tile }
+  | { type: "REPLACE_TILE"; index: number; tile: Tile }
   | { type: "DISCARD"; tile: Tile; riichi?: boolean }
   | { type: "ADD_MELD"; meld: Meld; consume: Tile[]; kuikae?: number[] }
   | { type: "UPGRADE_KAN"; meldIndex: number; tile: Tile }
@@ -123,7 +124,7 @@ export function appReducer(state: AppState, action: Action): AppState {
         hydrated: true,
       };
     case "ADD_TILE": {
-      if (handSize(state) >= 14) return state;
+      if (handSize(state) >= 14 || !canAddTile(state, action.tile)) return state;
       const nextHand = [...state.hand, action.tile];
       let situationalYaku = state.situationalYaku;
       if (handSize(state) === 13 && state.discards.length === 0 && state.melds.length === 0) {
@@ -138,7 +139,16 @@ export function appReducer(state: AppState, action: Action): AppState {
         situationalYaku,
       });
     }
+    case "REPLACE_TILE": {
+      if (state.riichi || handSize(state) !== 13 || !state.hand[action.index]) return state;
+      const hand = state.hand.slice();
+      hand.splice(action.index, 1);
+      if (!canAddTile({ ...state, hand }, action.tile)) return state;
+      hand.splice(action.index, 0, action.tile);
+      return changed(state, { hand, winTile: null, uraDora: [] });
+    }
     case "REMOVE_TILE": {
+      if (state.riichi) return state;
       const index = state.hand.findIndex((tile) => tile.i === action.tile.i && tile.red === action.tile.red);
       if (index < 0) return state;
       const hand = state.hand.slice();
@@ -146,7 +156,7 @@ export function appReducer(state: AppState, action: Action): AppState {
       return changed(state, { hand, winTile: null, uraDora: [], situationalYaku: withoutYaku(state.situationalYaku, "tenhou", "chiihou", "haitei", "houtei", "rinshan", "chankan") });
     }
     case "DISCARD": {
-      if (state.kuikae.includes(action.tile.i)) return state;
+      if (!canDiscardTile(state, action.tile)) return state;
       const index = state.hand.findIndex((tile) => tile.i === action.tile.i && tile.red === action.tile.red);
       if (index < 0) return state;
       const hand = state.hand.slice();
@@ -199,6 +209,7 @@ export function appReducer(state: AppState, action: Action): AppState {
       });
     }
     case "REMOVE_MELD": {
+      if (state.riichi) return state;
       const meld = state.melds[action.meldIndex];
       if (!meld) return state;
       const restoredHand = [...state.hand, ...meld.consumed];
@@ -296,6 +307,7 @@ export function appReducer(state: AppState, action: Action): AppState {
     case "SET_SORT":
       return { ...state, yakuSort: action.sort };
     case "RON":
+      if (handSize(state) !== 13 || !canAddTile(state, action.tile)) return state;
       return changed(state, {
         hand: [...state.hand, action.tile],
         winTile: action.tile.i,
@@ -319,12 +331,16 @@ export function appReducer(state: AppState, action: Action): AppState {
 interface AppContextValue {
   state: AppState;
   dispatch: React.Dispatch<Action>;
+  saveFailed: boolean;
+  retrySave: () => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
+  const [saveFailed, setSaveFailed] = useReducer((_previous: boolean, next: boolean) => next, false);
+  const [saveAttempt, retrySave] = useReducer((attempt: number) => attempt + 1, 0);
 
   useEffect(() => {
     try {
@@ -337,13 +353,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!state.hydrated) return;
-    const { history: _history, hydrated: _hydrated, ...persisted } = state;
-    void _history;
-    void _hydrated;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
-  }, [state]);
+    setSaveFailed(!saveState(state));
+  }, [state, saveAttempt]);
 
-  const value = useMemo(() => ({ state, dispatch }), [state]);
+  const value = useMemo(() => ({ state, dispatch, saveFailed, retrySave }), [state, saveFailed]);
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
 

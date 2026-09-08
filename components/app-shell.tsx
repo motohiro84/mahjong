@@ -1,5 +1,6 @@
 "use client";
 
+import { useAppState } from "./app-provider";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -12,9 +13,11 @@ const NAV = [
 
 export function AppShell({ children, title, subtitle }: { children: React.ReactNode; title?: string; subtitle?: string }) {
   const pathname = usePathname();
+  const { saveFailed, retrySave } = useAppState();
   return (
     <div className="app-shell">
       {title && <header className="reference-header"><h1>{title}</h1><p>{subtitle}</p></header>}
+      {saveFailed && <div className="save-warning" role="alert">端末に保存できませんでした。画面を閉じると変更が失われる可能性があります。<button onClick={retrySave}>保存を再試行</button></div>}
       {children}
       <nav className="bottom-nav" aria-label="メインページ">
         {NAV.map((item) => {

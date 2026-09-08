@@ -81,3 +81,20 @@ export function doraCount(state: Pick<AppState, "hand" | "melds" | "dora" | "ura
 }
 
 export const ALL_TILES = Array.from({ length: 34 }, (_, i) => i);
+
+export function redAlreadyUsed(state: Pick<AppState, "hand" | "melds" | "discards">, i: number) {
+  return [...state.hand, ...state.discards].some((tile) => tile.i === i && tile.red)
+    || state.melds.some((meld) => meld.tiles.some((tile, index) => tile === i && meld.redFlags[index]));
+}
+
+export function canAddTile(state: AppState, tile: Tile) {
+  return visibleCount(state, tile.i) + state.uraDora.filter((i) => i === tile.i).length < 4
+    && (!tile.red || (RED_FIVES.includes(tile.i) && !redAlreadyUsed(state, tile.i)));
+}
+
+export function canDiscardTile(state: AppState, tile: Tile) {
+  if (handSize(state) !== 14 || state.kuikae.includes(tile.i)) return false;
+  // ADD_TILE は末尾に追加する。採点用の winTile を変えてもツモ牌は変わらない。
+  const drawn = state.hand.at(-1);
+  return !state.riichi || (state.agariType === "tsumo" && drawn?.i === tile.i && drawn.red === tile.red);
+}

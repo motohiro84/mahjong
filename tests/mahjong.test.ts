@@ -1,10 +1,11 @@
+import { saveState, STORAGE_KEY } from "../lib/persistence";
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { AppState } from "../lib/types";
 import { bestScore, scorePreview } from "../lib/scoring";
 import { yakuGuides } from "../lib/yaku-guide";
-import { buildMeld, isPermanentFuriten, noYakuWarning } from "../lib/analysis";
-import { countsOf, handSize, visibleCount } from "../lib/tiles";
+import { buildMeld, isPermanentFuriten, noYakuWarning, ronCandidates } from "../lib/analysis";
+import { countsOf, handSize, visibleCount, canDiscardTile, canAddTile } from "../lib/tiles";
 import { shanten, ukeire } from "../lib/shanten";
 import { appReducer } from "../components/app-provider";
 
@@ -209,4 +210,97 @@ test("ダブル役満採用時は大四喜を2倍役満として扱う", () => {
   assert.equal(bestScore(current)?.yakuman, 3);
   assert.equal(bestScore(current)?.yaku?.find((yaku) => yaku.nm === "大四喜")?.yakuman, 2);
   assert.equal(bestScore(current)?.score?.limit, "3倍役満");
+});
+
+
+test("捨てた待ち牌が4枚見えても別の待ち牌でロンできない", () => {
+  const current = state([0, 1, 2, 9, 10, 11, 18, 19, 20, 4, 5, 31, 31]);
+  current.discards = [{ i: 3, red: false }];
+  current.otherDiscards = [3, 3, 3];
+  assert.equal(isPermanentFuriten(current), true);
+  assert.deepEqual(ronCandidates(current), []);
+  assert.ok(scorePreview(current, 6, "tsumo")?.score);
+  current.discards = [];
+  current.otherDiscards = [3, 3, 3, 3];
+  assert.equal(isPermanentFuriten(current), false);
+  assert.ok(ronCandidates(current).includes(6));
+});
+
+test("リーチ後は和了牌の指定を変えてもツモ牌だけ打牌できる", () => {
+  let current = state([0, 1, 2, 9, 10, 11, 18, 19, 20, 4, 5, 31, 31]);
+  current.riichi = true;
+  current = appReducer(current, { type: "ADD_TILE", tile: { i: 28, red: false } });
+  current = appReducer(current, { type: "SET_WIN_TILE", tile: 0 });
+  assert.equal(canDiscardTile(current, current.hand[0]), false);
+  assert.equal(appReducer(current, { type: "DISCARD", tile: current.hand[0] }), current);
+  assert.equal(appReducer(current, { type: "REMOVE_TILE", tile: current.hand[0] }), current);
+  const next = appReducer(current, { type: "DISCARD", tile: { i: 28, red: false } });
+  assert.equal(handSize(next), 13);
+  assert.equal(next.riichi, true);
+  assert.equal(next.hand.some((tile) => tile.i === 28), false);
+});
+
+test("リーチ後に通常五を引いて手中の赤五と入れ替えることはできない", () => {
+  let current = state([0, 1, 2, 9, 10, 11, 18, 19, 20, 4, 5, 31, 31]);
+  current.hand[9].red = true;
+  current.riichi = true;
+  current = appReducer(current, { type: "ADD_TILE", tile: { i: 4, red: false } });
+  assert.equal(canDiscardTile(current, { i: 4, red: true }), false);
+  assert.equal(appReducer(current, { type: "DISCARD", tile: { i: 4, red: true } }), current);
+  assert.equal(canDiscardTile(current, { i: 4, red: false }), true);
+});
+
+test("赤五を捨てた後は同色の赤五のツモ・ロン入力を拒否する", () => {
+  const current = state([0, 1, 2, 9, 10, 11, 18, 19, 20, 3, 5, 31, 31]);
+  current.discards = [{ i: 4, red: true }];
+  const red = { i: 4, red: true };
+  assert.equal(canAddTile(current, red), false);
+  assert.equal(appReducer(current, { type: "ADD_TILE", tile: red }), current);
+  assert.equal(appReducer(current, { type: "RON", tile: red }), current);
+  assert.equal(canAddTile(current, { i: 4, red: false }), true);
+});
+
+test("再読込後の13枚を捨て牌や状況役を変えずに修正して戻せる", () => {
+  const saved = state([0, 1, 2, 9, 10, 11, 18, 19, 20, 4, 5, 31, 31]);
+  saved.discards = [{ i: 28, red: false }];
+  saved.situationalYaku = ["rinshan"];
+  const loaded = appReducer(saved, { type: "HYDRATE", state: saved });
+  assert.equal(loaded.history.length, 0);
+  const corrected = appReducer(loaded, { type: "REPLACE_TILE", index: 0, tile: { i: 6, red: false } });
+  assert.equal(handSize(corrected), 13);
+  assert.equal(corrected.hand[0].i, 6);
+  assert.deepEqual(corrected.discards, loaded.discards);
+  assert.deepEqual(corrected.situationalYaku, loaded.situationalYaku);
+  assert.deepEqual(appReducer(corrected, { type: "UNDO" }).hand, loaded.hand);
+  const locked = { ...loaded, riichi: true };
+  assert.equal(appReducer(locked, { type: "REPLACE_TILE", index: 0, tile: { i: 6, red: false } }), locked);
+});
+
+test("入力修正でも5枚目と使用済み赤五を拒否する", () => {
+  const current = state([0, 1, 2, 9, 10, 11, 18, 19, 20, 4, 5, 31, 31]);
+  current.otherDiscards = [31, 31];
+  current.discards = [{ i: 4, red: true }];
+  assert.equal(appReducer(current, { type: "REPLACE_TILE", index: 0, tile: { i: 31, red: false } }), current);
+  assert.equal(appReducer(current, { type: "REPLACE_TILE", index: 0, tile: { i: 4, red: true } }), current);
+});
+
+
+test("保存先へのアクセス拒否・容量不足から再試行で復旧できる", () => {
+  const current = state([0, 1, 2]);
+  assert.equal(saveState(current, () => { throw new Error("SecurityError"); }), false);
+  assert.equal(saveState(current, () => ({ setItem() { throw new Error("QuotaExceededError"); } })), false);
+  let saved = "";
+  assert.equal(saveState(current, () => ({ setItem(key, value) { assert.equal(key, STORAGE_KEY); saved = value; } })), true);
+  const restored = appReducer(current, { type: "HYDRATE", state: JSON.parse(saved) });
+  assert.deepEqual(restored.hand, current.hand);
+  assert.equal("history" in JSON.parse(saved), false);
+  assert.deepEqual(current.hand.map((tile) => tile.i), [0, 1, 2]);
+});
+
+
+test("リーチ後に暗槓を取り消して手牌を変更できない", () => {
+  const current = state([0, 1, 2, 9, 10, 11, 4, 5, 31, 31]);
+  current.riichi = true;
+  current.melds = [buildMeld(state([27, 27, 27, 27]), "ANKAN", 27).meld];
+  assert.equal(appReducer(current, { type: "REMOVE_MELD", meldIndex: 0 }), current);
 });

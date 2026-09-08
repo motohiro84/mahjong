@@ -19,7 +19,7 @@ import {
 } from "@/lib/analysis";
 import { bestScore, scorePreview } from "@/lib/scoring";
 import { shanten, ukeire } from "@/lib/shanten";
-import { countsOf, doraCount, handSize, HONORS, indicatorToDora, isOpen, RED_FIVES, tileName, visibleCount } from "@/lib/tiles";
+import { canAddTile, canDiscardTile, redAlreadyUsed as hasRedTile, countsOf, doraCount, handSize, HONORS, indicatorToDora, isOpen, RED_FIVES, tileName, visibleCount } from "@/lib/tiles";
 import { yakuGuides } from "@/lib/yaku-guide";
 
 type ActionMode = "RON" | "RIICHI" | MeldType;
@@ -46,6 +46,7 @@ function SampleTiles({ tiles }: { tiles: number[] }) {
 
 export function AnalysisPage() {
   const { state, dispatch } = useAppState();
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [redMode, setRedMode] = useState(false);
   const [doraMode, setDoraMode] = useState(false);
   const [contextMode, setContextMode] = useState(false);
@@ -70,7 +71,7 @@ export function AnalysisPage() {
     return meldCands(type);
   };
 
-  const redAlreadyUsed = (i: number) => state.hand.some((tile) => tile.i === i && tile.red) || state.melds.some((meld) => meld.tiles.some((tile, index) => tile === i && meld.redFlags[index]));
+  const redAlreadyUsed = (i: number) => hasRedTile(state, i);
 
   const commitMeld = (type: Exclude<MeldType, "ADD">, incoming: number, option?: ChiOption, calledRed = false) => {
     const built = buildMeld(state, type, incoming, option, calledRed);
@@ -117,6 +118,7 @@ export function AnalysisPage() {
     if (visibleCount(state, i) >= 4 || (red && redAlreadyUsed(i))) return;
     dispatch({ type: "ADD_TILE", tile: { i, red } });
     setRedMode(false);
+    setEditingIndex(null);
   };
 
   const discard = (tile: Tile, riichi = false) => {
@@ -134,9 +136,14 @@ export function AnalysisPage() {
   };
 
   const renderInput = () => {
+    if (editingIndex !== null && size === 13 && !state.riichi && state.hand[editingIndex]) {
+      const rest = { ...state, hand: state.hand.filter((_, index) => index !== editingIndex) };
+      return <section className="workspace"><div className="workspace-title"><h2>{tileName(state.hand[editingIndex].i, state.hand[editingIndex].red)}を置き換える牌</h2><button onClick={() => setEditingIndex(null)}>やめる</button><button className={`red-five${redMode ? " active" : ""}`} aria-pressed={redMode} onClick={() => setRedMode((value) => !value)}>赤5</button></div><TileGrid redMode={redMode} disabled={(i) => !canAddTile(rest, { i, red: redMode && RED_FIVES.includes(i) })} onPick={(i, red) => { dispatch({ type: "REPLACE_TILE", index: editingIndex, tile: { i, red } }); setEditingIndex(null); setRedMode(false); }} /></section>;
+    }
     if (doraMode) return <section className="workspace"><div className="workspace-title"><h2>ドラ表示牌を選択</h2><button className="text-button" onClick={() => setDoraMode(false)}>やめる</button></div><TileGrid onPick={(i) => { dispatch({ type: "ADD_DORA", tile: i }); setDoraMode(false); }} disabled={(i) => state.dora.length >= 5 || visibleCount(state, i) >= 4} /></section>;
     const choice = renderActionChoice();
     return <>
+      {size === 13 && !state.riichi && <p className="note">入力を修正するには、上の手牌をタップしてください。</p>}
       <ActionRow size={size} state={state} candidatesFor={candidatesFor} startAction={startAction} />
       {choice || (size <= 13 ? <section className="workspace"><div className="workspace-title"><div><h2>{size < 13 ? `配牌を入力（あと${13 - size}枚）` : "ツモ牌を入力"}</h2><p>牌を1回タップ</p></div><button className={`red-five${redMode ? " active" : ""}`} aria-pressed={redMode} onClick={() => setRedMode((value) => !value)}>赤5</button></div><TileGrid onPick={addTile} redMode={redMode} disabled={(i) => visibleCount(state, i) >= 4 || (redMode && RED_FIVES.includes(i) && redAlreadyUsed(i))} /></section> : <DiscardPanel state={state} onDiscard={discard} />)}
     </>;
@@ -152,11 +159,11 @@ export function AnalysisPage() {
     {contextMode && <div className="context-overlay" role="dialog" aria-modal="true" aria-label="場風と自風の設定" onClick={() => setContextMode(false)}><section className="context-panel" onClick={(event) => event.stopPropagation()}><header><h2>場・自風を設定</h2><button onClick={() => setContextMode(false)}>閉じる</button></header><div><b>場風</b><span>{HONORS.slice(0, 2).map((honor, index) => <button key={honor} className={state.round === index ? "active" : ""} onClick={() => dispatch({ type: "SET_ROUND", round: index })}>{honor}場</button>)}</span></div><div><b>自風</b><span>{HONORS.slice(0, 4).map((honor, index) => <button key={honor} className={state.seat === index ? "active" : ""} onClick={() => dispatch({ type: "SET_SEAT", seat: index })}>{honor}家</button>)}</span></div></section></div>}
     {warning && <div className="hand-warning" role="alert">{warning}</div>}
 
-    <section className="hand-area" aria-label="現在の手牌"><div className="hand-row">{sortedHand.length ? sortedHand.map((tile, index) => <MahjongTile key={`${tile.i}-${tile.red}-${index}`} i={tile.i} red={tile.red} dora={tile.red || doraTiles.includes(tile.i)} selected={state.tab === "score" && state.winTile === tile.i} onClick={state.tab === "score" && size === 14 ? () => dispatch({ type: "SET_WIN_TILE", tile: tile.i }) : size === 14 ? () => discard(tile) : size < 13 ? () => dispatch({ type: "REMOVE_TILE", tile }) : undefined} label={state.tab === "score" ? `${tileName(tile.i, tile.red)}を和了牌に指定` : undefined} />) : <p>配牌を入力してください</p>}</div><div className="meld-row">{state.melds.map((meld, index) => { const canRemove = state.hand.length + meld.consumed.length + (state.melds.length - 1) * 3 <= 14; return <div className="meld" key={`${meld.type}-${index}`}><small>{({ PON: "ポン", CHI: "チー", KAN: "明槓", ANKAN: "暗槓", ADD: "加槓" } as const)[meld.type]}</small>{meld.tiles.map((tile, tileIndex) => meld.type === "ANKAN" && (tileIndex === 0 || tileIndex === 3) ? <span className="face-down-tile" key={tileIndex} aria-label="伏せ牌" /> : <MahjongTile key={tileIndex} i={tile} red={meld.redFlags[tileIndex]} small />)}<button disabled={!canRemove} title={canRemove ? "取り消す" : "この操作は「1手戻す」で取り消してください"} aria-label={`${({ PON: "ポン", CHI: "チー", KAN: "明槓", ANKAN: "暗槓", ADD: "加槓" } as const)[meld.type]}を取り消す`} onClick={() => dispatch({ type: "REMOVE_MELD", meldIndex: index })}>×</button></div>; })}</div></section>
+    <section className="hand-area" aria-label="現在の手牌"><div className="hand-row">{sortedHand.length ? sortedHand.map((tile, index) => <MahjongTile key={`${tile.i}-${tile.red}-${index}`} i={tile.i} red={tile.red} dora={tile.red || doraTiles.includes(tile.i)} selected={state.tab === "score" && state.winTile === tile.i} disabled={size === 14 && state.tab !== "score" && !canDiscardTile(state, tile)} onClick={state.tab === "score" && size === 14 ? () => dispatch({ type: "SET_WIN_TILE", tile: tile.i }) : size === 14 ? () => discard(tile) : size === 13 && !state.riichi ? () => { setEditingIndex(state.hand.indexOf(tile)); setMode(null); setDoraMode(false); dispatch({ type: "SET_TAB", tab: "input" }); } : size < 13 ? () => dispatch({ type: "REMOVE_TILE", tile }) : undefined} label={size === 13 && !state.riichi ? `${tileName(tile.i, tile.red)}の入力を修正` : state.tab === "score" ? `${tileName(tile.i, tile.red)}を和了牌に指定` : undefined} />) : <p>配牌を入力してください</p>}</div><div className="meld-row">{state.melds.map((meld, index) => { const canRemove = !state.riichi && state.hand.length + meld.consumed.length + (state.melds.length - 1) * 3 <= 14; return <div className="meld" key={`${meld.type}-${index}`}><small>{({ PON: "ポン", CHI: "チー", KAN: "明槓", ANKAN: "暗槓", ADD: "加槓" } as const)[meld.type]}</small>{meld.tiles.map((tile, tileIndex) => meld.type === "ANKAN" && (tileIndex === 0 || tileIndex === 3) ? <span className="face-down-tile" key={tileIndex} aria-label="伏せ牌" /> : <MahjongTile key={tileIndex} i={tile} red={meld.redFlags[tileIndex]} small />)}<button disabled={!canRemove} title={canRemove ? "取り消す" : "この操作は「1手戻す」で取り消してください"} aria-label={`${({ PON: "ポン", CHI: "チー", KAN: "明槓", ANKAN: "暗槓", ADD: "加槓" } as const)[meld.type]}を取り消す`} onClick={() => dispatch({ type: "REMOVE_MELD", meldIndex: index })}>×</button></div>; })}</div></section>
 
     <nav className="analysis-tabs" aria-label="分析内容">{([['input', '手牌'], ['visible', '場の牌'], ['ukeire', '有効牌'], ['aim', '狙い目'], ['score', '成立役']] as const).map(([tab, label]) => <button key={tab} className={state.tab === tab ? "active" : ""} onClick={() => dispatch({ type: "SET_TAB", tab })}>{label}</button>)}</nav>
     <section className="analysis-body">{state.tab === "input" ? renderInput() : state.tab === "visible" ? <VisibleTilesPanel state={state} /> : state.tab === "ukeire" ? <UkeirePanel state={state} addTile={addTile} /> : state.tab === "aim" ? <YakuPanel state={state} /> : <ScorePanel state={state} />}</section>
-    <footer className="edit-footer"><span>{size === 14 ? "捨てる牌を選んでください" : size === 13 ? "ツモ牌を入力してください" : `あと${13 - size}枚`}</span><button disabled={!state.history.length} onClick={() => dispatch({ type: "UNDO" })}>1手戻す</button><button onClick={() => dispatch({ type: "RESET" })}>リセット</button></footer>
+    <footer className="edit-footer"><span>{editingIndex !== null && size === 13 && !state.riichi ? "置き換える牌を選んでください" : size === 14 ? "捨てる牌を選んでください" : size === 13 ? "ツモ牌を入力してください" : `あと${13 - size}枚`}</span><button disabled={!state.history.length} onClick={() => { setEditingIndex(null); dispatch({ type: "UNDO" }); }}>1手戻す</button><button onClick={() => { setEditingIndex(null); setMode(null); setChiChoice(null); setRedCall(null); setDoraMode(false); dispatch({ type: "RESET" }); }}>リセット</button></footer>
   </main></AppShell>;
 }
 
@@ -172,8 +179,7 @@ function DiscardRow({ candidate, best, onClick }: { candidate: ReturnType<typeof
 
 function DiscardPanel({ state, onDiscard }: { state: ReturnType<typeof useAppState>["state"]; onDiscard: (tile: Tile) => void }) {
   const score = bestScore(state);
-  let list = discardCandidates(state).filter((candidate) => !state.kuikae.includes(candidate.tile.i));
-  if (state.riichi && state.winTile !== null) list = list.filter((candidate) => candidate.tile.i === state.winTile);
+  const list = discardCandidates(state).filter((candidate) => canDiscardTile(state, candidate.tile));
   return <section className="discard-panel">{score && !score.noYaku && !score.needWinTile && <div className="win-banner"><b>ツモ和了できます</b><span>成立役タブで役・点数・支払いを確認できます。</span></div>}{list.map((candidate, index) => <DiscardRow key={`${candidate.tile.i}-${candidate.tile.red}`} candidate={candidate} best={index === 0} onClick={() => onDiscard(candidate.tile)} />)}<p className="note">捨てる牌をタップしてください。有効牌は種類数のみ表示しています。</p></section>;
 }
 
