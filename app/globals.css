@@ -292,3 +292,150 @@ button { color: inherit; }
 
 .save-warning { position: relative; z-index: 10; padding: 10px; background: #fff1cc; color: #5c3500; font-size: 13px; flex-shrink: 0; }
 .save-warning button { margin-left: 8px; padding: 6px; border: 1px solid currentColor; border-radius: 6px; }
+
+/* 対局ナビ: 既存の分析画面とは独立した進行画面 */
+.bottom-nav { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.play-page { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.play-page button, .play-dialog button { cursor: pointer; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-2); padding: 9px 10px; font-size: 12px; }
+.play-page button:disabled, .play-dialog button:disabled { cursor: default; opacity: .38; }
+.play-page button:focus-visible, .play-dialog button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.play-page .mahjong-tile, .play-dialog .mahjong-tile { padding: 0; flex-shrink: 0; }
+.play-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: max(12px, env(safe-area-inset-top)) 14px 10px; background: var(--surface); }
+.play-eyebrow { color: var(--gold); font-size: 10px; letter-spacing: .12em; font-weight: 700; }
+.play-header h1 { margin: 4px 0 0; font-size: 24px; letter-spacing: .03em; }
+.play-header h1 small { font-size: 12px; color: var(--muted); font-weight: 400; }
+.play-header .play-context { text-align: left; font-size: 13px; }
+.play-context span { display: block; margin-top: 3px; font-size: 10px; color: var(--muted); }
+.play-seats { flex: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 0 10px 10px; background: var(--surface); }
+.play-seats > div { padding: 7px 5px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); }
+.play-seats > .turn { border-color: var(--gold); background: #e9b84b12; }
+.play-seats span { display: block; font-size: 9px; color: var(--muted); white-space: nowrap; }
+.play-seats .turn span, .play-seats .me span { color: var(--gold); }
+.play-seats b { font-size: 15px; font-variant-numeric: tabular-nums; }
+.play-hand { flex: none; padding: 8px 10px; border-bottom: 1px solid var(--line); background: var(--surface-2); }
+.play-hand-caption { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 10px; color: var(--muted); }
+.play-hand-caption b { color: var(--gold); font-weight: 500; }
+.play-hand-tiles { display: flex; gap: 2px; align-items: center; flex-wrap: wrap; min-height: 36px; }
+.play-hand-tiles .mahjong-tile { width: calc((100% - 26px) / 14); height: auto; aspect-ratio: 3 / 4; border-radius: 3px; }
+.play-hand-tiles p { margin: 6px 0; color: var(--muted); font-size: 12px; }
+.play-hand-tiles .selected { outline: 2px solid var(--gold); outline-offset: 0; }
+.play-melds { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 6px; }
+.play-melds > div { display: flex; gap: 4px; align-items: center; }
+.play-melds small { font-size: 9px; color: var(--muted); }
+.play-melds .mahjong-tile.small { width: 20px; height: 27px; }
+.play-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 12px 10px 18px; }
+.play-step { display: flex; gap: 9px; margin: 3px 2px 14px; }
+.play-step-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--gold); flex-shrink: 0; margin-top: 6px; box-shadow: 0 0 0 4px #e9b84b15; }
+.play-step h2 { font-size: 16px; margin: 0 0 5px; }
+.play-step p { font-size: 11px; color: var(--muted); margin: 0; line-height: 1.6; }
+.play-response { border: 1px solid #e9b84b55; background: #e9b84b09; border-radius: 12px; padding: 9px; margin-bottom: 16px; }
+.play-last { display: flex; align-items: center; gap: 9px; }
+.play-last > div { flex: 1; }
+.play-last small { display: block; color: var(--muted); font-size: 10px; }
+.play-last b { display: block; font-size: 12px; margin-top: 2px; }
+.play-last .mahjong-tile.small { width: 29px; height: 39px; }
+.play-last > button { font-size: 10px; padding: 7px; }
+.play-response-actions { display: flex; gap: 5px; margin-top: 8px; }
+.play-response-actions button { flex: 1; padding: 8px 4px; font-size: 11px; }
+.play-response-actions .play-ron:not(:disabled) { color: var(--gold); border-color: var(--gold); }
+.play-response > p { font-size: 10px; color: var(--muted); margin: 7px 0 0; }
+.play-picker { border-radius: 12px; background: var(--surface); padding: 9px; }
+.play-picker-tools { display: flex; justify-content: space-between; align-items: center; margin-bottom: 9px; font-size: 11px; color: var(--muted); }
+.play-picker-tools button { padding: 5px 12px; color: var(--text); }
+.play-picker-tools .selected { color: #ff9292; border-color: #ef7777; }
+.play-tile-row { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 4px; margin-top: 6px; }
+.play-tile-row .mahjong-tile { width: 100%; height: auto; aspect-ratio: 3 / 4; border-radius: 5px; }
+.play-page .play-primary, .play-dialog .play-primary { display: block; width: 100%; margin-top: 16px; background: var(--gold); color: #201b0d; border-color: var(--gold); font-size: 14px; font-weight: 700; padding: 13px; }
+.play-inline { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.play-inline label { font-size: 12px; }
+.play-inline input, .play-dialog input[type=checkbox] { accent-color: var(--gold); width: 17px; height: 17px; vertical-align: middle; margin-right: 5px; }
+.play-useful { margin-top: 15px; padding: 12px 2px; border-top: 1px solid var(--line); }
+.play-useful h3 { display: flex; justify-content: space-between; font-size: 12px; margin: 0 0 9px; }
+.play-useful h3 small { font-size: 10px; color: var(--muted); font-weight: 400; }
+.play-useful > div { display: flex; gap: 7px; flex-wrap: wrap; }
+.play-useful > div > span { display: grid; justify-items: center; gap: 3px; }
+.play-useful small { font-size: 10px; color: var(--muted); }
+.play-discard-list { display: grid; gap: 7px; margin-top: 12px; }
+.play-discard-list > button { display: flex; align-items: center; gap: 12px; text-align: left; padding: 8px 10px; }
+.play-discard-list > button > span { flex: 1; font-size: 13px; }
+.play-discard-list small { display: block; color: var(--muted); margin-top: 4px; font-size: 11px; }
+.play-discard-list em { font-style: normal; color: var(--gold); font-size: 10px; }
+.play-footer { flex: none; display: flex; gap: 5px; justify-content: space-between; padding: 8px; border-top: 1px solid var(--line); background: var(--surface); }
+.play-footer > div { display: flex; gap: 5px; }
+.play-footer button { font-size: 10px; padding: 10px 7px; }
+.play-footer .play-end { color: var(--muted); background: transparent; }
+.play-alert { padding: 9px; margin: 7px 0; color: #ffb6a5; background: #842e222e; font-size: 12px; line-height: 1.6; }
+.play-alert button { margin-left: 7px; }
+.play-dialog { padding: 0; width: min(calc(100% - 24px), 410px); max-height: 88dvh; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--text); box-shadow: 0 20px 80px #000a; overflow: hidden; }
+.play-dialog[open] { display: flex; flex-direction: column; }
+.play-dialog::backdrop { background: #03060bc9; }
+.play-dialog > header { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); flex: none; }
+.play-dialog > header h2 { font-size: 16px; margin: 0; }
+.play-dialog > header button { border: none; background: transparent; color: var(--muted); }
+.play-dialog-body { padding: 14px; overflow-y: auto; overscroll-behavior: contain; }
+.play-dialog h3 { font-size: 14px; margin: 16px 0 10px; }
+.play-dialog p { font-size: 12px; line-height: 1.7; }
+.play-dialog label { display: block; font-size: 12px; }
+.play-dialog select, .play-dialog input[type=number] { display: block; width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 7px; padding: 9px; margin-top: 5px; min-height: 38px; }
+.play-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+.play-tiles { display: inline-flex; gap: 3px; vertical-align: middle; flex-wrap: wrap; align-items: center; }
+.play-dialog .play-tiles .mahjong-tile.small { width: 29px; height: 39px; }
+.play-muted { color: var(--muted); font-size: 11px; line-height: 1.7; }
+.play-settings-section { margin: 16px 0; padding-top: 5px; border-top: 1px solid var(--line); }
+.play-rule-options { display: grid; gap: 12px; margin: 18px 0; }
+.play-dialog details { margin: 16px 0; }
+.play-danger { width: 100%; margin-top: 20px; color: var(--danger); }
+.play-call-option { display: flex; width: 100%; gap: 12px; justify-content: space-between; align-items: center; margin: 10px 0; }
+.play-guide { padding: 5px 0 13px; border-bottom: 1px solid var(--line); }
+.play-guide h3 { display: flex; justify-content: space-between; }
+.play-guide h3 small, .play-guide > span { color: var(--gold); font-size: 11px; }
+.play-river { border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+.play-river > div { display: flex; gap: 5px; flex-wrap: wrap; }
+.play-river > div > span { display: grid; justify-items: center; }
+.play-river small { font-size: 9px; margin-top: 3px; color: var(--muted); }
+.play-river .called { opacity: .5; }
+.play-river .declaration small { color: var(--gold); }
+.play-checkboxes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 14px 0; }
+.play-end-options { display: grid; gap: 12px; }
+.play-end-options button { min-height: 50px; text-align: left; }
+.play-win-entry { border-top: 1px solid var(--line); margin-top: 15px; padding-top: 3px; }
+.play-yaku-line, .play-settlement > div { display: flex; justify-content: space-between; font-size: 12px; margin: 8px 0; }
+.play-settlement { padding: 5px 12px 10px; border: 1px solid var(--line); border-radius: 10px; margin-top: 18px; background: var(--bg); }
+.play-settlement p { font-size: 11px; color: var(--muted); }
+.positive { color: var(--green); }
+.negative { color: var(--danger); }
+.play-result { padding: 14px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.play-result h2 { font-size: 21px; margin: 8px 0 18px; }
+.play-result p { font-size: 12px; color: var(--muted); line-height: 1.7; }
+.play-result table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 12px; }
+.play-result th, .play-result td { padding: 9px 3px; text-align: right; border-bottom: 1px solid var(--line); }
+.play-result th:first-child { text-align: left; }
+.play-result label { font-size: 13px; }
+@media (max-width: 360px) {
+  .play-header { padding-top: 9px; }
+  .play-header h1 { font-size: 20px; }
+  .play-seats b { font-size: 13px; }
+  .play-seats span { font-size: 8px; }
+  .play-footer button { padding: 9px 5px; font-size: 9px; }
+  .play-tile-row { gap: 3px; }
+  .play-picker { padding: 6px; }
+}
+@media (max-width: 430px) {
+  .play-scroll { padding: 8px 10px 14px; }
+  .play-response { padding: 7px; margin-bottom: 10px; }
+  .play-response-actions { gap: 4px; margin-top: 6px; }
+  .play-response-actions button { padding: 7px 3px; font-size: 10px; white-space: nowrap; }
+  .play-response > p { font-size: 9px; margin-top: 5px; }
+  .play-step { margin-bottom: 8px; }
+  .play-step h2 { font-size: 14px; margin-bottom: 4px; }
+  .play-step p { font-size: 10px; line-height: 1.5; }
+  .play-inline { margin-bottom: 7px; }
+  .play-inline button { padding: 7px; font-size: 10px; }
+  .play-picker-tools { margin-bottom: 6px; }
+  .play-tile-row { margin-top: 4px; }
+}
+.play-win-summary { padding: 14px; margin-top: 12px; border: 1px solid #e9b84b66; border-radius: 12px; background: #e9b84b0a; }
+.play-win-summary > small { color: var(--muted); font-size: 10px; }
+.play-win-summary strong { display: block; margin: 6px 0; color: var(--gold); font-size: 32px; }
+.play-win-summary strong span { font-size: 14px; margin-left: 5px; }
+.play-win-summary p { font-size: 11px; line-height: 1.7; color: var(--muted); margin: 5px 0; }

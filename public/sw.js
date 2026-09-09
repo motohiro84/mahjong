@@ -1,6 +1,6 @@
-const CACHE = "haishirube-v3";
+const CACHE = "haishirube-v4";
 const CACHE_PREFIX = "haishirube-";
-const APP_ROUTES = ["/", "/yaku", "/rules", "/glossary"];
+const APP_ROUTES = ["/", "/play", "/yaku", "/rules", "/glossary"];
 const TILE_FILES = [
   ...["m", "p", "s"].flatMap((suit) => Array.from({ length: 9 }, (_, index) => `/tiles/generated/${suit}${index + 1}.png`)),
   ...["east", "south", "west", "north", "white", "green", "red"].map((name) => `/tiles/generated/${name}.png`),

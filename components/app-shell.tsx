@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const NAV = [
+  { href: "/play", icon: "▶", main: "対局ナビ" },
   { href: "/", icon: "🀄", main: "手牌分析" },
   { href: "/yaku", icon: "一覧", main: "全役" },
   { href: "/rules", icon: "?", main: "ルール" },

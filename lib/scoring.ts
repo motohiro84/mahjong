@@ -265,7 +265,7 @@ function fuOf(state: AppState, decomposition: Decomposition, context: WaitContex
   return Math.ceil(fu / 10) * 10;
 }
 
-function pointResult(han: number, fu: number, dealer: boolean, tsumo: boolean, yakuman: number, state: Pick<AppState, "honba" | "kyotaku" | "kiriageMangan">) {
+export function pointResult(han: number, fu: number, dealer: boolean, tsumo: boolean, yakuman: number, state: Pick<AppState, "honba" | "kyotaku" | "kiriageMangan">) {
   let base: number;
   let limit = "";
   if (yakuman) {
